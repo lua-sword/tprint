@@ -5,7 +5,7 @@ local M = {
 	reserved = nil, -- reserved keywords
 	inline=true,
 	list_sep=",",
---	list_sep_last=",",
+	list_sep_last="",
 	ishort=true,
 	kshort=true,
 	updater = nil, --[[function(t, lvl, cfg) return cfg end]]
@@ -44,6 +44,7 @@ local function tprint(t, lvl, cfg)
 	local reserved	= cfg.reserved
 	--local inline	= cfg.inline
 	local separator	= cfg.list_sep
+	local list_sep_last = cfg.list_sep_last
 	local skipassign = cfg.skipassign
 
 	if type(t) == "table" then
@@ -52,7 +53,6 @@ local function tprint(t, lvl, cfg)
 		end
 		cfg.seen[t]=0
 		local r={}
-		r[#r+1]="{"
 		lvl=lvl+1 -- ident
 		local i=1 -- implicit numeric index
 		for k,v in pairs(t) do
@@ -79,11 +79,19 @@ local function tprint(t, lvl, cfg)
 					--	AST: `Pair{ `Number{ 1 }, `Id{ "one" } }
 				end
 				-- the content value
-				r[#r+1]= (cfg.inline and "" or (indent):rep(lvl)) .. line .. tprint(v,lvl,cfg)..(separator)
+				r[#r+1]= (cfg.inline and "" or (indent):rep(lvl)) .. line .. tprint(v,lvl,cfg)
 			end
 		end
 		lvl=lvl-1 -- dedent
-		r[#r+1]=(cfg.inline and "" or (indent):rep(lvl)).."}"
+		r = table.concat(r, (separator)..(cfg.inline and "" or "\n"))
+		if r=="" then -- a empty list
+			return "{}"
+		end
+		r = {
+			"{",
+			r..(list_sep_last),
+			(cfg.inline and "" or (indent):rep(lvl)).."}"
+		}
 		return table.concat(r, (cfg.inline and "" or "\n"))
 	end
 	if type(t) == "string" then
