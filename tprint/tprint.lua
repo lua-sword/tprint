@@ -142,9 +142,15 @@ local function internal_tprint(t, lvl, cfg)
 	return tostring(t)
 end
 local function pub_tprint(t, cfg)
-	cfg=cfg or {}
-	if type(cfg)~="table" then cfg={inline=cfg} end
-	for k,v in pairs(M.profiles[ cfg.inline ] or {}) do
+	local inline
+	if type(cfg)=="table" then
+		inline = cfg.inline
+	else
+		inline=cfg
+		cfg={}
+	end
+	if inline==nil then inline=M.inline end
+	for k,v in pairs(M.profiles[inline] or {}) do
 		if cfg[k]==nil and v~=nil then
 			cfg[k]=v
 		end
