@@ -1,11 +1,20 @@
 local M = {
+	inline=true,
+
 	indent = "\t",
 	assign = " = ",
-	identifier = "^[a-zA-Z_][a-zA-Z0-9_]*$", -- does not support UTF8 identifier
-	reserved = nil, -- reserved keywords
-	inline=true,
 	list_sep=",",
 	list_sep_last="",
+	empty_table="{}",
+
+	identifier = "^[a-zA-Z_][a-zA-Z0-9_]*$", -- does not support UTF8 identifier
+	reserved = {
+		["and"]=true, ["break"]=true, ["do"]=true, ["else"]=true, ["elseif"]=true, ["end"]=true,
+		["and"]=true, ["break"]=true, ["do"]=true, ["elseif"]=true, ["else"]=true, ["end"]=true,
+		["false"]=true, ["for"]=true, ["function"]=true, ["goto"]=true, ["if"]=true, ["in"]=true,
+		["local"]=true, ["nil"]=true, ["not"]=true, ["or"]=true, ["repeat"]=true, ["return"]=true,
+		["then"]=true, ["true"]=true, ["until"]=true, ["while"]=true, 
+	},
 	ishort=true,
 	kshort=true,
 	updater = nil, --[[function(t, lvl, cfg) return cfg end]]
@@ -15,6 +24,30 @@ local M = {
 		cfg.seen[t]=(cfg.seen[t] or 0) +1
 		return "{--[["..tostring(t).." is a trap! ("..tostring(cfg.seen[t])..")!]]} "
 	end,
+
+	inline_setup = {
+		[false] = {
+			indent = "\t",
+			assign = " = ",
+			list_sep=",",
+			list_sep_last="",
+			empty_table="{}",
+		},
+		[true] = {
+			indent = "",
+			assign = " = ",
+			list_sep=",",
+			list_sep_last="",
+			empty_table="{}",
+		},
+		["compact"] = {
+			indent = "",
+			assign = "=",
+			list_sep=",",
+			list_sep_last="",
+			empty_table="{}",
+		},
+	},
 }
 
 local function doublequote_dump_string(s, nonprintable_pat, nonprintable_names)
@@ -31,18 +64,18 @@ local function doublequote_dump_string(s, nonprintable_pat, nonprintable_names)
 	)..'"'
 end
 
-local function tprint(t, lvl, cfg)
+local function internal_tprint(t, lvl, cfg)
 	lvl = lvl or 0
 	cfg = cfg or {}
 
 	if cfg.updater then
 		cfg = cfg.updater(t, lvl, cfg)
 	end
+	--local inline	= cfg.inline
 	local indent	= cfg.indent
 	local assign	= cfg.assign
 	local identifier = cfg.identifier
 	local reserved	= cfg.reserved
-	--local inline	= cfg.inline
 	local separator	= cfg.list_sep
 	local list_sep_last = cfg.list_sep_last
 	local skipassign = cfg.skipassign
@@ -66,12 +99,12 @@ local function tprint(t, lvl, cfg)
 					--	"two",
 					--	AST: `Id{ "two" }
 					-- it's a key/hash index and k is a valid identifier and not a reserved word
-				elseif type(k) == "string" and cfg.kshort~=false and (type(identifier)~="string" or k:find(identifier)) and (not reserved or not reserved(k)) then
+				elseif type(k) == "string" and cfg.kshort~=false and (type(identifier)~="string" or k:find(identifier)) and (not reserved or not reserved[k]) then
 					line = k .. assign
 					--	foo="FOO",
 					--	AST: `Pair{ `String{ "foo" }, `String{ "FOO" } }
 				else
-					line = "["..tprint(k,lvl,cfg).."]"..assign
+					line = "["..internal_tprint(k,lvl,cfg).."]"..assign
 					--	["foo"]="FOO",
 					--	AST: `Pair{ `String{ "foo" }, `String{ "FOO" } }
 					-- or
@@ -79,20 +112,21 @@ local function tprint(t, lvl, cfg)
 					--	AST: `Pair{ `Number{ 1 }, `Id{ "one" } }
 				end
 				-- the content value
-				r[#r+1]= (cfg.inline and "" or (indent):rep(lvl)) .. line .. tprint(v,lvl,cfg)
+				r[#r+1]= (cfg.inline and "" or (indent):rep(lvl)) .. line .. internal_tprint(v,lvl,cfg)
 			end
 		end
 		lvl=lvl-1 -- dedent
-		r = table.concat(r, (separator)..(cfg.inline and "" or "\n"))
+		local r2 = { "{" }
+		r =  table.concat(r, (separator)..(cfg.inline and "" or "\n"))
 		if r=="" then -- a empty list
-			return "{}"
+			if cfg.empty_table then
+				return cfg.empty_table
+			end
+		else
+			table.insert(r2, (r..(list_sep_last)))
 		end
-		r = {
-			"{",
-			r..(list_sep_last),
-			(cfg.inline and "" or (indent):rep(lvl)).."}"
-		}
-		return table.concat(r, (cfg.inline and "" or "\n"))
+		table.insert(r2, (cfg.inline and "" or (indent):rep(lvl)).."}" )
+		return table.concat(r2, (cfg.inline and "" or "\n"))
 	end
 	if type(t) == "string" then
 		--return ("%q"):format(t)
@@ -100,9 +134,15 @@ local function tprint(t, lvl, cfg)
 	end
 	return tostring(t)
 end
-local function tprint2(t, cfg)
-	cfg = setmetatable(cfg or {}, {__index=M})
+local function pub_tprint(t, cfg)
+	cfg = cfg or {}
+	for k,v in pairs(M.inline_setup[cfg.inline or true] or {}) do
+		if cfg[k]==nil and v~=nil then
+			cfg[k]=v
+		end
+	end
+	cfg = setmetatable(cfg, {__index=M})
 	cfg.seen = cfg.seen or {}
-	return tprint(t, nil, cfg)
+	return internal_tprint(t, nil, cfg)
 end
-return setmetatable(M, {__call=function(_, ...) return tprint2(...) end})
+return setmetatable(M, {__call=function(_, ...) return pub_tprint(...) end})
