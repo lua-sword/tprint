@@ -1,17 +1,18 @@
-local M = { indent = "\t", eol="\n", assign=" = ", }
+local defaults = { indent = "\t", eol="\n", assign=" = ", }
+
 -- for inline use indent="" eol=" " assign="="
-local function tprint(t, lvl)
+local function internal_tprint(t, lvl, cfg)
 	lvl = lvl or 0
 	if type(t) == "table" then
 		local r={}
 		r[#r+1]="{"
 		lvl=lvl+1
 		for k,v in pairs(t) do
-			r[#r+1]= (M.indent or ""):rep(lvl).."["..tprint(k,lvl).."]"..(M.assign or "=")..tprint(v,lvl)..","
+			r[#r+1]= (cfg.indent or ""):rep(lvl).."["..internal_tprint(k,lvl,cfg).."]"..(cfg.assign or "=")..internal_tprint(v,lvl,cfg)..","
 		end
 		lvl=lvl-1
-		r[#r+1]=(M.indent or ""):rep(lvl).."}"
-		return table.concat(r, (M.eol or ""))
+		r[#r+1]=(cfg.indent or ""):rep(lvl).."}"
+		return table.concat(r, (cfg.eol or ""))
 	end
 	if type(t) == "string" then
 		--return ("%q"):format(t)
@@ -19,4 +20,10 @@ local function tprint(t, lvl)
 	end
 	return tostring(t)
 end
-return setmetatable(M, {__call=function(_, t) return tprint(t) end})
+local function tprint(t, cfg)
+	cfg = cfg or {}
+	setmetatable(cfg, {__index=defaults})
+	return internal_tprint(t, nil, cfg)
+end
+--return setmetatable(M, {__call=function(_, ...) return tprint(...) end})
+return tprint

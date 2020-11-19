@@ -2,10 +2,38 @@ local M = {
 	inline=true,
 
 	indent = "\t",
+	eol="\n",
 	assign = " = ",
 	list_sep=",",
 	list_sep_last="",
 	empty_table="{}",
+
+	profiles = {
+		[false] = {
+			indent = "\t",
+			eol="\n",
+			assign = " = ",
+			list_sep=",",
+			list_sep_last="",
+			empty_table="{}",
+		},
+		[true] = {
+			indent = "",
+			eol="",
+			assign = " = ",
+			list_sep=",",
+			list_sep_last="",
+			empty_table="{}",
+		},
+		["compact"] = {
+			indent = "",
+			eol="",
+			assign = "=",
+			list_sep=",",
+			list_sep_last="",
+			empty_table="{}",
+		},
+	},
 
 	identifier = "^[a-zA-Z_][a-zA-Z0-9_]*$", -- does not support UTF8 identifier
 	reserved = {
@@ -13,7 +41,7 @@ local M = {
 		["and"]=true, ["break"]=true, ["do"]=true, ["elseif"]=true, ["else"]=true, ["end"]=true,
 		["false"]=true, ["for"]=true, ["function"]=true, ["goto"]=true, ["if"]=true, ["in"]=true,
 		["local"]=true, ["nil"]=true, ["not"]=true, ["or"]=true, ["repeat"]=true, ["return"]=true,
-		["then"]=true, ["true"]=true, ["until"]=true, ["while"]=true, 
+		["then"]=true, ["true"]=true, ["until"]=true, ["while"]=true,
 	},
 	ishort=true,
 	kshort=true,
@@ -24,30 +52,6 @@ local M = {
 		cfg.seen[t]=(cfg.seen[t] or 0) +1
 		return "{--[["..tostring(t).." is a trap! ("..tostring(cfg.seen[t])..")!]]} "
 	end,
-
-	inline_setup = {
-		[false] = {
-			indent = "\t",
-			assign = " = ",
-			list_sep=",",
-			list_sep_last="",
-			empty_table="{}",
-		},
-		[true] = {
-			indent = "",
-			assign = " = ",
-			list_sep=",",
-			list_sep_last="",
-			empty_table="{}",
-		},
-		["compact"] = {
-			indent = "",
-			assign = "=",
-			list_sep=",",
-			list_sep_last="",
-			empty_table="{}",
-		},
-	},
 }
 
 local function doublequote_dump_string(s, nonprintable_pat, nonprintable_names)
@@ -64,6 +68,9 @@ local function doublequote_dump_string(s, nonprintable_pat, nonprintable_names)
 	)..'"'
 end
 
+local insert = assert(table.insert)
+local concat = assert(table.concat)
+
 local function internal_tprint(t, lvl, cfg)
 	lvl = lvl or 0
 	cfg = cfg or {}
@@ -71,8 +78,8 @@ local function internal_tprint(t, lvl, cfg)
 	if cfg.updater then
 		cfg = cfg.updater(t, lvl, cfg)
 	end
-	--local inline	= cfg.inline
 	local indent	= cfg.indent
+	assert(type(indent)=="string")
 	local assign	= cfg.assign
 	local identifier = cfg.identifier
 	local reserved	= cfg.reserved
@@ -112,21 +119,21 @@ local function internal_tprint(t, lvl, cfg)
 					--	AST: `Pair{ `Number{ 1 }, `Id{ "one" } }
 				end
 				-- the content value
-				r[#r+1]= (cfg.inline and "" or (indent):rep(lvl)) .. line .. internal_tprint(v,lvl,cfg)
+				insert(r, (indent):rep(lvl) .. line .. internal_tprint(v,lvl,cfg))
 			end
 		end
 		lvl=lvl-1 -- dedent
 		local r2 = { "{" }
-		r =  table.concat(r, (separator)..(cfg.inline and "" or "\n"))
+		r =  concat(r, (separator)..(cfg.eol))
 		if r=="" then -- a empty list
 			if cfg.empty_table then
 				return cfg.empty_table
 			end
 		else
-			table.insert(r2, (r..(list_sep_last)))
+			insert(r2, (r..(list_sep_last)))
 		end
-		table.insert(r2, (cfg.inline and "" or (indent):rep(lvl)).."}" )
-		return table.concat(r2, (cfg.inline and "" or "\n"))
+		insert(r2, (indent):rep(lvl).."}" )
+		return concat(r2, (cfg.eol))
 	end
 	if type(t) == "string" then
 		--return ("%q"):format(t)
@@ -135,8 +142,9 @@ local function internal_tprint(t, lvl, cfg)
 	return tostring(t)
 end
 local function pub_tprint(t, cfg)
-	cfg = cfg or {}
-	for k,v in pairs(M.inline_setup[cfg.inline or true] or {}) do
+	cfg=cfg or {}
+	if type(cfg)~="table" then cfg={inline=cfg} end
+	for k,v in pairs(M.profiles[ cfg.inline ] or {}) do
 		if cfg[k]==nil and v~=nil then
 			cfg[k]=v
 		end
@@ -145,4 +153,5 @@ local function pub_tprint(t, cfg)
 	cfg.seen = cfg.seen or {}
 	return internal_tprint(t, nil, cfg)
 end
-return setmetatable(M, {__call=function(_, ...) return pub_tprint(...) end})
+--return setmetatable(M, {__call=function(_, ...) return pub_tprint(...) end})
+return pub_tprint
